@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Memory Layers">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4F7DE8"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#DDE6FF" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <g stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round" fill="none" opacity="0.92">
+    <path d="M13 30.5c0-4.1 8.5-7.5 19-7.5s19 3.4 19 7.5"/>
+    <path d="M13 39.5c0 4.1 8.5 7.5 19 7.5s19-3.4 19-7.5"/>
+    <path d="M13 48.5c0 4.1 8.5 7.5 19 7.5s19-3.4 19-7.5"/>
+  </g>
+  <ellipse cx="32" cy="24" rx="19" ry="8" fill="url(#top)"/>
+  <ellipse cx="32" cy="24" rx="19" ry="8" fill="none" stroke="#FFFFFF" stroke-width="2.4" opacity="0.95"/>
+</svg>

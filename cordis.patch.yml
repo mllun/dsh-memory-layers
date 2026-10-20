@@ -1,0 +1,5 @@
+- insert:
+    - id: dsh-memory-layers
+      name: '@local/dsh-memory-layers'
+      config:
+        hotLimit: 600

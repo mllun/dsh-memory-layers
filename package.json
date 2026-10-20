@@ -1,0 +1,53 @@
+{
+  "name": "@local/dsh-memory-layers",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Layered long-term memory for DeepSeek Harness: a ~600-character hot layer, month-archived cold entries with keyword recall, and extractive day/week/month summaries that keep injected context small.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "memory",
+    "long-term-memory",
+    "summarization",
+    "agent-tools"
+  ],
+  "author": "mllun",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mllun/dsh-memory-layers.git"
+  },
+  "homepage": "https://github.com/mllun/dsh-memory-layers#readme",
+  "bugs": {
+    "url": "https://github.com/mllun/dsh-memory-layers/issues"
+  },
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/smoke.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

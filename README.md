@@ -47,7 +47,13 @@ $DSH_HOME/dsh-memory-layers/
 
 ### 1. 通过插件管理器安装（推荐）
 
-把仓库克隆或下载到本地任意目录，然后在 DSH 里让插件管理器安装这个**包目录**：
+先把仓库克隆到本地任意目录：
+
+```bash
+git clone https://github.com/mllun/dsh-memory-layers.git
+```
+
+然后在 DSH 里让插件管理器安装这个**包目录**：
 
 ```
 plugin_manager({ action: "install_bundle", target: "<本仓库的绝对路径>" })

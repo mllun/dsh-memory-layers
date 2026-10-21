@@ -10,13 +10,17 @@
  *  - mem_write           append to the cold layer, optionally nominate it
  *                        for the hot layer's candidate block
  *  - mem_recall          keyword recall across every cold month
+ *  - mem_recent          the last N days, newest first
+ *  - mem_by_tag          entries with one exact tag
+ *  - mem_by_date         entries inside a closed local-date range
  *  - mem_summarize       generate the day / week / month summary
  *  - mem_stats           report the volume of each layer
  *
  * Every file lives under `$DSH_HOME/dsh-memory-layers/`; tools accept no
- * caller-supplied paths. `@module dsh-memory-layers`
+ * caller-supplied paths. The window queries (recent / by_tag / by_date) and
+ * recall are read-only. `@module dsh-memory-layers`
  */
-import { appendCold, MAX_COLD_CHARS, recall } from './lib/cold.mjs';
+import { appendCold, byDate, byTag, MAX_COLD_CHARS, recall, recent } from './lib/cold.mjs';
 import { getHot, setHot, DEFAULT_HOT_LIMIT } from './lib/hot.mjs';
 import { dataDir } from './lib/paths.mjs';
 import { memoryStats } from './lib/stats.mjs';
@@ -62,6 +66,17 @@ const SUMMARY_LAYER_SCHEMA = {
   additionalProperties: false,
 };
 
+/** One hot-layer topic index row (`topic|YYYY-MM`). */
+const TOPIC_SCHEMA = {
+  type: 'object',
+  properties: {
+    topic: { type: 'string', description: '主题名。' },
+    month: { type: 'string', description: '对应的冷层月份 YYYY-MM。' },
+  },
+  required: ['topic', 'month'],
+  additionalProperties: false,
+};
+
 /**
  * Validate the configured hot-layer budget, falling back to the default.
  * @param {unknown} value
@@ -81,12 +96,14 @@ function normalizeHotLimit(value, logger) {
 }
 
 /**
- * Render a hot-layer read for humans: body, budget state, pending candidates.
- * @param {{ ok: boolean, content: string, chars: number, limit: number, overLimit: boolean, hint: string, candidates: Array<{ time: string, tag: string, content: string }> }} value
+ * Render a hot-layer read for humans: body, budget state, candidates, topics.
+ * @param {{ ok: boolean, content: string, chars: number, limit: number, overLimit: boolean, hint: string, candidates: Array<{ time: string, tag: string, content: string }>, topics: Array<{ topic: string, month: string }> }} value
  * @returns {Array<{ type: 'text', text: string }>}
  */
 function renderHot(value) {
-  const header = `热层 · ${value.chars}/${value.limit} 字` + (value.candidates.length ? ` · 候选 ${value.candidates.length} 条` : '');
+  const header = `热层 · ${value.chars}/${value.limit} 字`
+    + (value.candidates.length ? ` · 候选 ${value.candidates.length} 条` : '')
+    + (value.topics.length ? ` · 主题 ${value.topics.length} 条` : '');
   const body = value.content.trim() === '' ? '（热层还是空的）' : value.content;
   const lines = [header, '', body];
   if (value.hint) lines.push('', value.hint);
@@ -95,6 +112,31 @@ function renderHot(value) {
     for (const candidate of value.candidates) {
       lines.push(`- [${candidate.time}] [${candidate.tag}] ${candidate.content}`);
     }
+  }
+  if (value.topics.length > 0) {
+    lines.push('', '主题索引（主题|年月，用于定位冷层月份）：');
+    for (const topic of value.topics) lines.push(`- ${topic.topic}|${topic.month}`);
+  }
+  return [{ type: 'text', text: lines.join('\n') }];
+}
+
+/**
+ * Render one window query (recent / by_tag / by_date).
+ * @param {string} title
+ * @param {{ scannedFiles: number, scannedEntries: number, matched: number, returned: number, items: Array<{ date: string, tag: string, content: string }> }} value
+ * @returns {Array<{ type: 'text', text: string }>}
+ */
+function renderWindow(title, value) {
+  const header = `${title} · ${value.matched} 条（扫描 ${value.scannedFiles} 个文件 / ${value.scannedEntries} 条）`;
+  if (value.returned === 0) {
+    return [{ type: 'text', text: `${header}\n没有匹配的冷层条目。` }];
+  }
+  const lines = [header];
+  for (const item of value.items) {
+    lines.push(`- [${item.date}] [${item.tag}] ${item.content}`);
+  }
+  if (value.matched > value.returned) {
+    lines.push(`（仅显示最近 ${value.returned} 条，可加大 limit）`);
   }
   return [{ type: 'text', text: lines.join('\n') }];
 }
@@ -115,7 +157,8 @@ export function apply(ctx, config = {}) {
         description:
           '读取热层记忆（每次会话开始时先读）。热层是核心记忆：身份、长期约定、正在推进的事，'
           + `上限约 ${hotLimit} 字，内容放在插件数据目录的 hot.md（$DSH_HOME/dsh-memory-layers/hot.md）。`
-          + '返回正文、字数、是否超限，以及待提升的候选条目；超限时请接着调用 mem_hot_set 精简。',
+          + '返回正文、字数、是否超限、待提升的候选条目，以及主题索引（每行「主题|年月」，不占正文字数）。'
+          + '超限时请接着调用 mem_hot_set 精简；想不起某件事时，可以先用主题索引定位月份，再用 mem_by_date 取该月。',
         parameters: {
           type: 'object',
           properties: {},
@@ -134,8 +177,10 @@ export function apply(ctx, config = {}) {
               hint: { type: 'string', description: '超限时的精简提示；未超限为空字符串。' },
               candidates: { type: 'array', items: CANDIDATE_SCHEMA },
               candidateCount: { type: 'integer' },
+              topics: { type: 'array', items: TOPIC_SCHEMA },
+              topicCount: { type: 'integer' },
             },
-            required: ['ok', 'path', 'content', 'chars', 'limit', 'overLimit', 'hint', 'candidates', 'candidateCount'],
+            required: ['ok', 'path', 'content', 'chars', 'limit', 'overLimit', 'hint', 'candidates', 'candidateCount', 'topics', 'topicCount'],
             additionalProperties: false,
           },
           render: (_args, value) => renderHot(value),
@@ -154,7 +199,8 @@ export function apply(ctx, config = {}) {
         description:
           '全量覆盖热层记忆（覆盖，不是追加）：content 是完整的 Markdown 正文，写入即替换旧正文，'
           + `上限约 ${hotLimit} 字。正文只该放长期有效、每次会话都要用到的信息（身份、约定、当前目标）；细节写进冷层用 mem_recall 召回。`
-          + '保留的热层候选项默认原样留下；如果 content 里自带 candidates:start / candidates:end 注释块，则用块内条目替换候选区。'
+          + '保留的热层候选项和主题索引默认原样留下；如果 content 里自带 candidates:start / candidates:end 注释块，则用块内条目替换候选区；'
+          + '自带 topics:start / topics:end 块则用块内「主题|年月」行替换主题索引（两区都不占正文字数）。'
           + '超过上限仍会写入，但会返回 overLimit 和精简提示。',
         parameters: {
           type: 'object',
@@ -178,9 +224,10 @@ export function apply(ctx, config = {}) {
               overLimit: { type: 'boolean' },
               hint: { type: 'string' },
               candidateCount: { type: 'integer' },
+              topicCount: { type: 'integer' },
               message: { type: 'string' },
             },
-            required: ['ok', 'path', 'chars', 'limit', 'overLimit', 'hint', 'candidateCount', 'message'],
+            required: ['ok', 'path', 'chars', 'limit', 'overLimit', 'hint', 'candidateCount', 'topicCount', 'message'],
             additionalProperties: false,
           },
           render: (_args, value) => [
@@ -254,12 +301,19 @@ export function apply(ctx, config = {}) {
       tools.register({
         name: 'mem_recall',
         description:
-          '按关键词在冷层里跨月召回记忆：大小写不敏感的子串匹配，多个词用空格分隔时条目需同时命中；内容或 tag 命中都算。'
+          '按关键词在冷层里跨月召回记忆：大小写不敏感的子串匹配；内容或 tag 命中都算。'
+          + 'mode=and（默认）要求多个词同时命中，mode=or 时任一命中即可；单关键词时两者相同。'
           + '返回原文条目（日期、时间、tag、内容），按时间倒序，默认 10 条。适合「记得有这件事但细节想不起来」时使用。',
         parameters: {
           type: 'object',
           properties: {
-            keyword: { type: 'string', description: '检索词；多个词用空格分隔（全部命中才算）。' },
+            keyword: { type: 'string', description: '检索词；多个词用空格分隔。' },
+            mode: {
+              type: 'string',
+              enum: ['and', 'or'],
+              default: 'and',
+              description: '多个词的组合方式，默认 and（全部命中）；or 表示任一命中。',
+            },
             limit: {
               type: 'integer',
               minimum: 1,
@@ -277,6 +331,7 @@ export function apply(ctx, config = {}) {
             properties: {
               ok: { type: 'boolean' },
               keyword: { type: 'string' },
+              mode: { type: 'string', description: '本次使用的组合方式：and 或 or。' },
               tokens: { type: 'array', items: { type: 'string' } },
               scannedFiles: { type: 'integer', description: '扫描过的冷层文件数。' },
               scannedEntries: { type: 'integer', description: '扫描过的条目数。' },
@@ -284,7 +339,7 @@ export function apply(ctx, config = {}) {
               returned: { type: 'integer', description: '本次返回条数。' },
               items: { type: 'array', items: RECALL_ITEM_SCHEMA },
             },
-            required: ['ok', 'keyword', 'tokens', 'scannedFiles', 'scannedEntries', 'matched', 'returned', 'items'],
+            required: ['ok', 'keyword', 'mode', 'tokens', 'scannedFiles', 'scannedEntries', 'matched', 'returned', 'items'],
             additionalProperties: false,
           },
           render: (_args, value) => {
@@ -307,6 +362,155 @@ export function apply(ctx, config = {}) {
         },
       }),
     'dsh-memory-layers: mem_recall',
+  );
+
+  ctx.effect(
+    () =>
+      tools.register({
+        name: 'mem_recent',
+        description:
+          '取最近 N 天（含今天）的冷层条目，按时间倒序，只读。days 默认 3（1–365），limit 默认 50（1–200）。'
+          + '适合「刚才 / 这两天发生了什么」类问题。检索回退顺序：先 mem_recent(3) 看最近；没有结果再看热层的主题索引定位月份，'
+          + '用 mem_by_date 取那个月；最后才用 mem_recall 全文搜。',
+        parameters: {
+          type: 'object',
+          properties: {
+            days: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 365,
+              default: 3,
+              description: '往回看多少天（含今天），默认 3。',
+            },
+            limit: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 200,
+              default: 50,
+              description: '最多返回条数，默认 50。',
+            },
+          },
+          additionalProperties: false,
+        },
+        output: {
+          schema: {
+            type: 'object',
+            properties: {
+              ok: { type: 'boolean' },
+              days: { type: 'integer', description: '实际覆盖的天数。' },
+              from: { type: 'string', description: '区间起始日期 YYYY-MM-DD。' },
+              to: { type: 'string', description: '区间结束日期 YYYY-MM-DD（今天）。' },
+              scannedFiles: { type: 'integer' },
+              scannedEntries: { type: 'integer' },
+              matched: { type: 'integer', description: '区间内条目总数。' },
+              returned: { type: 'integer' },
+              items: { type: 'array', items: RECALL_ITEM_SCHEMA },
+            },
+            required: ['ok', 'days', 'from', 'to', 'scannedFiles', 'scannedEntries', 'matched', 'returned', 'items'],
+            additionalProperties: false,
+          },
+          render: (_args, value) => renderWindow(`最近 ${value.days} 天（${value.from} ~ ${value.to}）`, value),
+        },
+        async execute(args = {}) {
+          return recent(args);
+        },
+      }),
+    'dsh-memory-layers: mem_recent',
+  );
+
+  ctx.effect(
+    () =>
+      tools.register({
+        name: 'mem_by_tag',
+        description:
+          '按标签取冷层条目：不区分大小写的精确匹配，按时间倒序，只读，默认 20 条（最多 200）。'
+          + 'tag 传 - 表示取没有标签的条目。适合按分类回顾某类记忆。',
+        parameters: {
+          type: 'object',
+          properties: {
+            tag: { type: 'string', description: '标签名；- 表示没有标签的条目。' },
+            limit: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 200,
+              default: 20,
+              description: '最多返回条数，默认 20。',
+            },
+          },
+          required: ['tag'],
+          additionalProperties: false,
+        },
+        output: {
+          schema: {
+            type: 'object',
+            properties: {
+              ok: { type: 'boolean' },
+              tag: { type: 'string', description: '实际匹配的标签。' },
+              scannedFiles: { type: 'integer' },
+              scannedEntries: { type: 'integer' },
+              matched: { type: 'integer', description: '带该标签的条目总数。' },
+              returned: { type: 'integer' },
+              items: { type: 'array', items: RECALL_ITEM_SCHEMA },
+            },
+            required: ['ok', 'tag', 'scannedFiles', 'scannedEntries', 'matched', 'returned', 'items'],
+            additionalProperties: false,
+          },
+          render: (_args, value) => renderWindow(`标签「${value.tag}」`, value),
+        },
+        async execute(args = {}) {
+          return byTag(args);
+        },
+      }),
+    'dsh-memory-layers: mem_by_tag',
+  );
+
+  ctx.effect(
+    () =>
+      tools.register({
+        name: 'mem_by_date',
+        description:
+          '按本地日期区间取冷层条目：from / to 都是 YYYY-MM-DD，闭区间，按时间倒序，只读，默认 50 条（最多 200）。'
+          + '配合热层主题索引使用——先看索引里某个主题涉及哪几个月，再用 mem_by_date 取这些月份；'
+          + '检索回退顺序：mem_recent(3) → 主题索引 → mem_by_date。',
+        parameters: {
+          type: 'object',
+          properties: {
+            from: { type: 'string', description: '起始日期 YYYY-MM-DD（含）。' },
+            to: { type: 'string', description: '结束日期 YYYY-MM-DD（含）。' },
+            limit: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 200,
+              default: 50,
+              description: '最多返回条数，默认 50。',
+            },
+          },
+          required: ['from', 'to'],
+          additionalProperties: false,
+        },
+        output: {
+          schema: {
+            type: 'object',
+            properties: {
+              ok: { type: 'boolean' },
+              from: { type: 'string' },
+              to: { type: 'string' },
+              scannedFiles: { type: 'integer' },
+              scannedEntries: { type: 'integer' },
+              matched: { type: 'integer', description: '区间内条目总数。' },
+              returned: { type: 'integer' },
+              items: { type: 'array', items: RECALL_ITEM_SCHEMA },
+            },
+            required: ['ok', 'from', 'to', 'scannedFiles', 'scannedEntries', 'matched', 'returned', 'items'],
+            additionalProperties: false,
+          },
+          render: (_args, value) => renderWindow(`${value.from} ~ ${value.to}`, value),
+        },
+        async execute(args = {}) {
+          return byDate(args);
+        },
+      }),
+    'dsh-memory-layers: mem_by_date',
   );
 
   ctx.effect(
@@ -387,8 +591,9 @@ export function apply(ctx, config = {}) {
                   limit: { type: 'integer' },
                   overLimit: { type: 'boolean' },
                   candidates: { type: 'integer' },
+                  topics: { type: 'integer' },
                 },
-                required: ['path', 'chars', 'limit', 'overLimit', 'candidates'],
+                required: ['path', 'chars', 'limit', 'overLimit', 'candidates', 'topics'],
                 additionalProperties: false,
               },
               cold: {
@@ -434,7 +639,8 @@ export function apply(ctx, config = {}) {
             const lines = [
               `数据目录：${value.dataDir}`,
               `热层：${value.hot.chars}/${value.hot.limit} 字` + (value.hot.overLimit ? '（超限，请精简）' : '')
-                + (value.hot.candidates > 0 ? ` · 候选 ${value.hot.candidates} 条` : ''),
+                + (value.hot.candidates > 0 ? ` · 候选 ${value.hot.candidates} 条` : '')
+                + (value.hot.topics > 0 ? ` · 主题 ${value.hot.topics} 条` : ''),
               `冷层：${value.cold.files} 个文件 / ${value.cold.entries} 条 / ${value.cold.chars} 字`
                 + (value.cold.latest ? `（最新 ${value.cold.latest}）` : ''),
             ];

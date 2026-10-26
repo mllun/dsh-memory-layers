@@ -1,8 +1,6 @@
 # dsh-memory-layers
 
 [![npm version](https://img.shields.io/npm/v/dsh-memory-layers.svg)](https://www.npmjs.com/package/dsh-memory-layers)
-[![license](https://img.shields.io/npm/l/dsh-memory-layers.svg)](LICENSE)
-[![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-blue)](https://github.com/topics/dsh-plugin)
 
 **npm：https://www.npmjs.com/package/dsh-memory-layers** · 安装：`npm i dsh-memory-layers`
 

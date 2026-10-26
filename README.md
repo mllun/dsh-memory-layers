@@ -1,5 +1,11 @@
 # dsh-memory-layers
 
+[![npm version](https://img.shields.io/npm/v/dsh-memory-layers.svg)](https://www.npmjs.com/package/dsh-memory-layers)
+[![license](https://img.shields.io/npm/l/dsh-memory-layers.svg)](LICENSE)
+[![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-blue)](https://github.com/topics/dsh-plugin)
+
+**npm：https://www.npmjs.com/package/dsh-memory-layers** · 安装：`npm i dsh-memory-layers`
+
 给 DeepSeek Harness 的分层长期记忆：一个约 600 字、每次会话必读的**热层**，一份按月归档、可按关键词跨月召回的**冷层全文**，以及**日 → 周 → 月**三级抽取式摘要。目标是在不撑大上下文的前提下，让很久以前的细节仍然找得回来。
 
 Layered long-term memory for DeepSeek Harness: a ~600-character hot layer, a month-archived cold layer with keyword recall, and extractive day/week/month summaries that keep injected context small.
@@ -85,10 +91,13 @@ DSH STORE 的源码扫描会读这一段，所以逐项写明插件实际碰到�
 ### 1. 从 npm 安装（推荐）
 
 ```bash
-npm i -g dsh-memory-layers   # 或装进当前 profile 的 node_modules
+npm i dsh-memory-layers          # 装进当前 profile 的 node_modules
+npm i -g dsh-memory-layers       # 或全局安装
 ```
 
-包名就是 `dsh-memory-layers`，在 profile 的 `cordis.patch.yml` 里 `name: dsh-memory-layers` 即可。
+- npm 页面：https://www.npmjs.com/package/dsh-memory-layers
+- 最新版本：`npm view dsh-memory-layers version`
+- 零运行时依赖，装完即可用；在 profile 的 `cordis.patch.yml` 里写 `name: dsh-memory-layers` 就能激活。
 
 ### 2. 通过插件管理器安装仓库
 

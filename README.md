@@ -65,7 +65,15 @@ v1.2 起，热层和候选区从“只存不管”变成**自己管自己**：�
 
 要求：Node.js ≥ 20，DeepSeek Harness 0.2.x（本插件是 Host 插件，依赖 `ctx.get('tools')` 注册工具）。
 
-### 1. 通过插件管理器安装（推荐）
+### 1. 从 npm 安装（推荐）
+
+```bash
+npm i -g dsh-memory-layers   # 或装进当前 profile 的 node_modules
+```
+
+包名就是 `dsh-memory-layers`，在 profile 的 `cordis.patch.yml` 里 `name: dsh-memory-layers` 即可。
+
+### 2. 通过插件管理器安装仓库
 
 先把仓库克隆到本地任意目录：
 
@@ -81,20 +89,20 @@ plugin_manager({ action: "install_bundle", target: "<本仓库的绝对路径>" 
 
 安装会把包链接进当前 profile（`dependencies` + `dsh.profile.bundles` + `node_modules`），并立即尝试激活。看到 `application: applied` 后，工具列表里会出现 `mem_hot_get` 等九个工具。
 
-### 2. 手动注册
+### 3. 手动注册
 
 在 profile 的 `cordis.patch.yml` 里加：
 
 ```yaml
 - insert:
     - id: dsh-memory-layers
-      name: '@local/dsh-memory-layers'
+      name: dsh-memory-layers
       config:
         hotLimit: 600
         autoEvict: true
 ```
 
-前提是该包已能被 Node 解析（放在 profile 的 `node_modules` 下，或改成从仓库路径 `file:` / `link:` 安装）。改完需要重启 DSH。
+前提是该包已能被 Node 解析（放在 profile 的 `node_modules` 下，或从仓库路径 `file:` / `link:` 安装）。改完需要重启 DSH。
 
 ### 卸载
 
@@ -279,7 +287,7 @@ v1.2 起还会给出使用度（正文只取前 40 字）：
 ```yaml
 - insert:
     - id: dsh-memory-layers
-      name: '@local/dsh-memory-layers'
+      name: dsh-memory-layers
       config:
         hotLimit: 600            # 热层正文字数上限，100–20000，缺省 600
         autoEvict: true          # 热层超限时自动腾挪到冷层，缺省 true

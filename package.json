@@ -1,7 +1,6 @@
 {
-  "name": "@local/dsh-memory-layers",
+  "name": "dsh-memory-layers",
   "version": "1.2.0",
-  "private": true,
   "type": "module",
   "description": "Layered long-term memory for DeepSeek Harness: a ~600-character hot layer that evicts its own overflow, month-archived cold entries with usage-ranked keyword recall, and extractive day/week/month summaries that keep injected context small.",
   "keywords": [

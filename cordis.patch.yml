@@ -1,6 +1,6 @@
 - insert:
     - id: dsh-memory-layers
-      name: '@local/dsh-memory-layers'
+      name: dsh-memory-layers
       config:
         hotLimit: 600            # 热层正文字数上限（100–20000）
         autoEvict: true          # 超限时自动把最不活跃的块腾挪到冷层

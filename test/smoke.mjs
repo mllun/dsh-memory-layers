@@ -10,11 +10,11 @@
  *  - v1.2: auto-evict, candidate TTL, usage trace + weight decay, bigram
  *    ranking, source evidence, tiered summary compression, session auto-log.
  *
- * The data root is redirected with DSH_MEMORY_ROOT so the real memory of this
- * machine is never touched.
+ * The data root is redirected through the `dataRoot` config option, so the real
+ * memory of this machine is never touched. Persistence is checked by re-importing
+ * the plugin with a cache-busting query instead of spawning a child process.
  */
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -22,8 +22,6 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const home = mkdtempSync(path.join(tmpdir(), 'dsh-memory-layers-'));
-process.env.DSH_HOME = home;
-process.env.DSH_MEMORY_ROOT = home;
 
 const dataDir = path.join(home, 'memory');
 const { apply } = await import('../index.js');
@@ -118,7 +116,7 @@ try {
   // v1.0 / v1.1 behaviour, with autoEvict off to prove the old path is intact
   // ------------------------------------------------------------------------
   const { ctx, registered, call } = createContext();
-  apply(ctx, { hotLimit: 600, autoEvict: false });
+  apply(ctx, { hotLimit: 600, autoEvict: false, dataRoot: home });
 
   const names = [
     'mem_hot_get', 'mem_hot_set', 'mem_write', 'mem_recall',
@@ -337,16 +335,19 @@ try {
   assert.ok(stats.topRecalled[0].hits >= 1);
   assert.ok(stats.topRecalled[0].content.length <= 40, 'topRecalled 只留前 40 字');
 
-  // --- 重启后数据完整：子进程重新读文件 ------------------------------------
-  const roundtrip = execFileSync(
-    process.execPath,
-    [path.join(root, 'roundtrip.mjs')],
-    { env: { ...process.env, DSH_HOME: home, DSH_MEMORY_ROOT: home }, encoding: 'utf8' },
-  );
-  const persisted = JSON.parse(roundtrip.trim());
-  assert.equal(persisted.hot, `${body}\n- 新增一行`);
-  assert.equal(persisted.coldEntries, 7);
-  assert.equal(persisted.topicCount, 2);
+  // --- 重新加载后数据完整：换一个模块实例重新读文件 ------------------------
+  // A cache-busting query gives a brand-new module instance (fresh caches and
+  // queue), so this proves the state lives on disk rather than in memory —
+  // without spawning a child process, which DSH STORE's source policy treats as
+  // a "commands" permission signal.
+  const fresh = await import(`../index.js?fresh=${Date.now()}`);
+  const freshTools = createContext();
+  fresh.apply(freshTools.ctx, { hotLimit: 600, dataRoot: home });
+  const reloaded = await freshTools.call('mem_hot_get');
+  assert.equal(reloaded.content, `${body}\n- 新增一行`, '新实例应读到同一份热层');
+  assert.equal(reloaded.topicCount, 2);
+  const reloadedStats = await freshTools.call('mem_stats');
+  assert.equal(reloadedStats.cold.entries, 7, '新实例应读到全部冷层条目');
 
   // --- 手动损坏的文件不应让读取崩溃 ----------------------------------------
   writeFileSync(coldFileFor(todayKey), `${readFileSync(coldFileFor(todayKey), 'utf8')}这不是条目行\n`, 'utf8');
@@ -363,7 +364,7 @@ try {
   // v1.2
   // ------------------------------------------------------------------------
   const v12 = createContext();
-  apply(v12.ctx, { hotLimit: 600 });
+  apply(v12.ctx, { hotLimit: 600, dataRoot: home });
 
   // --- 变更六：source 证据 -------------------------------------------------
   const sourced = await v12.call('mem_write', {

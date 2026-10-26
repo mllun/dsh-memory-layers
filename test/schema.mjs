@@ -18,26 +18,24 @@
  */
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import os, { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const TOOLS_ENTRY = 'dsh/node_modules/@deepseek-ai/dsh-tools/lib/index.js';
 
 /** Likely install locations, so no machine-specific path is baked in. */
 function candidates() {
-  const list = [];
-  const localAppData = process.env.LOCALAPPDATA;
-  const programFiles = process.env.ProgramFiles ?? 'C:\\Program Files';
-  if (localAppData) list.push(path.join(localAppData, 'Programs', 'DeepSeek Harness', 'resources', 'app', TOOLS_ENTRY));
-  list.push(path.join(programFiles, 'DeepSeek Harness', 'resources', 'app', TOOLS_ENTRY));
-  list.push(`/Applications/DeepSeek Harness.app/Contents/Resources/app/${TOOLS_ENTRY}`);
-  list.push(`/opt/DeepSeek Harness/resources/app/${TOOLS_ENTRY}`);
-  return list;
+  return [
+    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'DeepSeek Harness', 'resources', 'app', TOOLS_ENTRY),
+    path.join('C:\\Program Files', 'DeepSeek Harness', 'resources', 'app', TOOLS_ENTRY),
+    `/Applications/DeepSeek Harness.app/Contents/Resources/app/${TOOLS_ENTRY}`,
+    `/opt/DeepSeek Harness/resources/app/${TOOLS_ENTRY}`,
+  ];
 }
 
-const host = process.env.DSH_TOOLS_PATH ?? candidates().find((file) => existsSync(file));
+const host = process.argv[2] ?? candidates().find((file) => existsSync(file));
 if (!host) {
-  console.log('schema: 跳过（找不到 dsh-tools，可用 DSH_TOOLS_PATH 指定）');
+  console.log('schema: 跳过（找不到 dsh-tools，可把路径作为第一个参数传入）');
   process.exit(0);
 }
 
@@ -48,7 +46,6 @@ assert.equal(typeof assertSupportedJsonSchema, 'function', 'dsh-tools 应导出 
 assert.equal(typeof validateJsonSchemaValue, 'function', 'dsh-tools 应导出 validateJsonSchemaValue');
 
 const home = mkdtempSync(path.join(tmpdir(), 'dsh-schema-'));
-process.env.DSH_MEMORY_ROOT = home;
 
 const { apply } = await import('../index.js');
 const { localDateKey } = await import('../lib/paths.mjs');
@@ -79,7 +76,7 @@ function parametersSchema(parameters) {
 }
 
 try {
-  apply(ctx, { hotLimit: 600, autoLogOnSessionEnd: true });
+  apply(ctx, { hotLimit: 600, autoLogOnSessionEnd: true, dataRoot: home });
   assert.equal(registered.size, 9, `应注册 9 个工具，实际 ${registered.size}`);
 
   for (const [name, definition] of registered) {

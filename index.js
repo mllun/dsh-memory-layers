@@ -32,7 +32,7 @@
 import { appendCold, byDate, byTag, countColdEntries, MAX_COLD_CHARS, recall, recent } from './lib/cold.mjs';
 import { normalizeConfig } from './lib/config.mjs';
 import { getHot, setHot } from './lib/hot.mjs';
-import { dataDir, localDateKey } from './lib/paths.mjs';
+import { configureDataRoot, dataDir, localDateKey } from './lib/paths.mjs';
 import { createSessionTracker } from './lib/session.mjs';
 import { memoryStats } from './lib/stats.mjs';
 import { PERIODS, summarize } from './lib/summary.mjs';
@@ -224,6 +224,7 @@ export function apply(ctx, rawConfig = {}) {
   }
 
   const config = normalizeConfig(rawConfig, ctx.logger);
+  configureDataRoot(config.dataRoot);
   const hotLimit = config.hotLimit;
   ctx.logger?.info?.(
     `[dsh-memory-layers] data dir: ${dataDir()}（热层上限 ${hotLimit} 字，自动腾挪 ${config.autoEvict ? '开' : '关'}）`,

@@ -1,9 +1,9 @@
 {
   "name": "@local/dsh-memory-layers",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "Layered long-term memory for DeepSeek Harness: a ~600-character hot layer, month-archived cold entries with keyword recall, and extractive day/week/month summaries that keep injected context small.",
+  "description": "Layered long-term memory for DeepSeek Harness: a ~600-character hot layer that evicts its own overflow, month-archived cold entries with usage-ranked keyword recall, and extractive day/week/month summaries that keep injected context small.",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -11,7 +11,9 @@
     "memory",
     "long-term-memory",
     "summarization",
-    "agent-tools"
+    "agent-tools",
+    "eviction",
+    "recall-ranking"
   ],
   "author": "mllun",
   "repository": {
@@ -39,7 +41,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node test/smoke.mjs"
+    "test": "node test/smoke.mjs && node test/schema.mjs",
+    "test:smoke": "node test/smoke.mjs",
+    "test:schema": "node test/schema.mjs"
   },
   "dsh": {
     "bundle": {

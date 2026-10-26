@@ -2,15 +2,16 @@
  * Re-read the memory files in a fresh process, so the test can prove that the
  * data survives the process instead of lingering in module state.
  *
- * Usage: DSH_HOME=<temp dir> node test/roundtrip.mjs
+ * Usage: DSH_MEMORY_ROOT=<temp dir> node test/roundtrip.mjs
+ * (`DSH_HOME` is still honoured as a fallback for older layouts.)
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-const home = process.env.DSH_HOME;
-if (!home) throw new Error('DSH_HOME is required');
+const root = process.env.DSH_MEMORY_ROOT ?? process.env.DSH_HOME;
+if (!root) throw new Error('DSH_MEMORY_ROOT (or DSH_HOME) is required');
 
-const dataDir = path.join(home, 'dsh-memory-layers');
+const dataDir = path.join(root, 'memory');
 let hot = readFileSync(path.join(dataDir, 'hot.md'), 'utf8');
 
 /** Remove one reserved block, returning its inner text and the remaining text. */
@@ -35,11 +36,13 @@ const topicCount = topics.inner
 
 const coldDir = path.join(dataDir, 'cold');
 let coldEntries = 0;
-for (const month of readdirSync(coldDir)) {
-  for (const file of readdirSync(path.join(coldDir, month))) {
-    if (!file.endsWith('.md')) continue;
-    const text = readFileSync(path.join(coldDir, month, file), 'utf8');
-    coldEntries += text.split(/\r?\n/).filter((line) => line.trim().startsWith('- [')).length;
+if (existsSync(coldDir)) {
+  for (const month of readdirSync(coldDir)) {
+    for (const file of readdirSync(path.join(coldDir, month))) {
+      if (!file.endsWith('.md')) continue;
+      const text = readFileSync(path.join(coldDir, month, file), 'utf8');
+      coldEntries += text.split(/\r?\n/).filter((line) => line.trim().startsWith('- [')).length;
+    }
   }
 }
 

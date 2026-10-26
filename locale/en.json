@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Memory Layers",
-    "description": "Layered long-term memory: a ~600-character hot layer read every session, month-archived cold entries recalled by keyword, and extractive day/week/month summaries that keep injected context small."
+    "description": "Layered long-term memory: a ~600-character hot layer that evicts its own overflow, month-archived cold entries recalled by keyword and ranked by usage, and extractive day/week/month summaries that keep injected context small."
   }
 }

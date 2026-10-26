@@ -2,4 +2,13 @@
     - id: dsh-memory-layers
       name: '@local/dsh-memory-layers'
       config:
-        hotLimit: 600
+        hotLimit: 600            # 热层正文字数上限（100–20000）
+        autoEvict: true          # 超限时自动把最不活跃的块腾挪到冷层
+        # evictTarget: 510       # 腾挪目标字数，缺省 floor(hotLimit*0.85)
+        candidateTtlDays: 30     # 候选超过这么多天就下沉到冷层
+        candidateMax: 12         # 候选数量上限，超出的最旧几条会下沉
+        usageThrottleMs: 5000    # usage.json 写盘节流窗口
+        halfLifeDays: 30         # 权重半衰期（天）
+        demoteThreshold: 20      # 权重低于此值且够老才允许被下沉
+        autoLogOnSessionEnd: false  # 会话结束自动把最后 3 轮压成一条冷层记录
+        autoLogMinTurns: 4       # 至少这么多轮才自动落档
